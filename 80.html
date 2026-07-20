@@ -114,7 +114,17 @@
         .taunt-mark .unit-body { box-shadow:0 0 0 5px rgba(255,100,40,0.8); border-radius:50%; animation: taunt-pulse 0.6s ease infinite; }
         @keyframes taunt-pulse { 0%,100%{ box-shadow:0 0 0 5px rgba(255,100,40,0.6); } 50%{ box-shadow:0 0 0 10px rgba(255,80,20,0.9); } }
         .link-mark .unit-body { box-shadow:0 0 0 4px rgba(120,180,255,0.6); border-radius:50%; }
-        .duel-mark .unit-body { box-shadow:0 0 0 4px rgba(255,80,80,0.7); border-radius:50%; }
+        .duel-mark .unit-body { box-shadow:0 0 0 4px rgba(255,80,80,0.7); border-radius:50%; animation: duel-glow 0.8s ease-in-out infinite; }
+@keyframes duel-glow { 0%,100%{ box-shadow:0 0 0 4px rgba(255,80,80,0.5); } 50%{ box-shadow:0 0 0 8px rgba(255,120,80,0.8), 0 0 20px rgba(255,80,80,0.4); } }
+@keyframes mantis-dash { 0%{ transform: translateX(0) scale(1); opacity:1; } 30%{ transform: translateX(20px) scale(1.1); opacity:0.8; } 60%{ transform: translateX(-10px) scale(1.05); opacity:0.6; } 100%{ transform: translateX(0) scale(1); opacity:0; } }
+@keyframes mantis-slash { 0%{ opacity:0; transform:scale(0.3) rotate(-20deg) translateX(-10px); } 40%{ opacity:1; transform:scale(1.1) rotate(-10deg) translateX(0); } 100%{ opacity:0; transform:scale(1.3) rotate(-5deg) translateX(15px); } }
+@keyframes mantis-strike { 0%{ transform: scale(1); filter: brightness(1); } 50%{ transform: scale(1.35); filter: brightness(1.5) drop-shadow(0 0 15px #ff4444); } 100%{ transform: scale(1); filter: brightness(1); } }
+@keyframes mantis-afterimage { 0%{ opacity:0.6; transform: scale(0.95); } 100%{ opacity:0; transform: scale(1.05); } }
+@keyframes duel-shake { 0%,100%{ transform: translateX(0); } 10%{ transform: translateX(-4px); } 20%{ transform: translateX(4px); } 30%{ transform: translateX(-3px); } 40%{ transform: translateX(3px); } 50%{ transform: translateX(-2px); } 60%{ transform: translateX(2px); } 70%{ transform: translateX(-1px); } 80%{ transform: translateX(1px); } }
+@keyframes arena-pulse { 0%,100%{ box-shadow: inset 0 0 30px rgba(255,0,0,0.3); } 50%{ box-shadow: inset 0 0 50px rgba(255,0,0,0.5); } }
+@keyframes vs-flash { 0%{ opacity:0; transform:scale(2) translateY(-30px); } 30%{ opacity:1; transform:scale(1) translateY(0); } 50%{ opacity:0.8; transform:scale(1.1) translateY(-5px); } 100%{ opacity:1; transform:scale(1) translateY(0); } }
+@keyframes combat-line { 0%{ transform: scaleX(0); opacity:0; } 50%{ opacity:1; } 100%{ transform: scaleX(1); opacity:0; } }
+@keyframes mantis-victory { 0%{ transform: translateY(0) rotate(0deg); } 20%{ transform: translateY(-15px) rotate(10deg); } 40%{ transform: translateY(-10px) rotate(-5deg); } 60%{ transform: translateY(-12px) rotate(5deg); } 80%{ transform: translateY(-8px) rotate(-3deg); } 100%{ transform: translateY(0) rotate(0deg); } }
         .link-line-layer { position:absolute; inset:0; pointer-events:none; z-index:7; }
         .link-line { stroke:rgba(130,190,255,0.7); stroke-width:2; fill:none; stroke-dasharray:4 4; }
         .btn-area { position:absolute; bottom:30px; width:100%; display:flex; justify-content:center; gap:10px; align-items:center; flex-wrap:wrap; z-index:40; }
@@ -411,7 +421,148 @@
         function screenFlash() { flashLayer.classList.add('screen-flash'); setTimeout(()=>flashLayer.classList.remove('screen-flash'),500); }
         async function showThunderAnimation() { const overlay=document.createElement('div'); overlay.className='thunder-overlay'; battleWrap.appendChild(overlay); const icon=document.createElement('div'); icon.className='thunder-icon'; icon.innerHTML='⚡'; battleWrap.appendChild(icon); await sleep(500); if(overlay.parentNode) overlay.remove(); if(icon.parentNode) icon.remove(); }
         function playScreenEffect(type) { const overlay=document.createElement('div'); overlay.style.cssText='position:absolute;inset:0;z-index:25;pointer-events:none;'; battleWrap.appendChild(overlay); let duration=600; switch(type) { case 'hardenedFish': overlay.classList.add('thorns-screen'); break; case 'reviveBoss': const c=document.createElement('div'); c.style.cssText='position:absolute;top:50%;left:50%;width:200px;height:200px;border-radius:50%;border:4px solid #aa44ff;box-shadow:0 0 40px #aa44ff;transform:translate(-50%,-50%);'; c.classList.add('revive-circle-anim'); overlay.appendChild(c); duration=700; break; case 'corrosionMage': overlay.classList.add('acid-rain-screen'); duration=500; break; case 'mountainBeast': overlay.classList.add('earthquake-screen'); duration=400; break; case 'shadowHunter': const cr=document.createElement('div'); cr.style.cssText='position:absolute;top:50%;left:50%;width:80px;height:80px;transform:translate(-50%,-50%);background:radial-gradient(circle,transparent 30%,#ff0000 30%,#ff0000 40%,transparent 40%);border-radius:50%;'; cr.classList.add('crosshair-anim'); overlay.appendChild(cr); duration=500; break; case 'vineGuardian': overlay.classList.add('vine-border-screen'); duration=600; break; } setTimeout(()=>overlay.remove(),duration); }
-        async function doUlt(attacker) { if(battleOver) return; const body=attacker.dom.querySelector('.unit-body'); body.classList.add('ult-anim'); screenFlash(); await sleep(300); if(battleOver) { body.classList.remove('ult-anim'); return; } if(attacker.team==='enemy') { const type=attacker.data.enemyType; playScreenEffect(type); if(type==='hardenedFish') { const sv=Math.floor(attacker.data.maxHp*0.3); attacker.data.shield+=sv; attacker.data.reflectDmgPct=0.4; attacker.data.reflectTurn=2; showHeal(attacker.dom,sv); } else if(type==='reviveBoss') { const dead=unitList.filter(u=>u.team==='enemy' && u.data.hp<=0); if(dead.length) { const t=dead[Math.floor(Math.random()*dead.length)]; t.data.hp=t.data.maxHp; t.data.shield=0; t.data.mp=0; t.data.stun=0; t.data.poisonDmg=0; t.data.poisonTurn=0; t.data.linkDebuff.isLinked=false; t.data.defDebuff=0; t.data.tauntedBy=null; t.data.sleepStack=0; showHeal(t.dom,t.data.maxHp); setBar(t.dom,'hp',t.data.hp,t.data.maxHp); setBar(t.dom,'mp',0,ULT_MAX_MP); refreshUI(t); } else { for(let u of getTeam('enemy')) { const sv=Math.floor(u.data.maxHp*0.2); u.data.shield+=sv; showHeal(u.dom,sv); } } } else if(type==='corrosionMage') { for(let t of getTeam('hero')) { if(t.data.poisonTurn>0) { const burst=t.data.poisonTurn*t.data.poisonDmg; t.data.hp-=burst; showPoison(t.dom,burst); } const res=calcDamage(attacker.data,t.data,0.8); if(!res.isDodge && t.data.hp>0) { let d=res.dmg; if(t.data.shield>0) { if(t.data.shield>=d) { t.data.shield-=d; d=0; } else { d-=t.data.shield; t.data.shield=0; } } t.data.hp-=d; showDamage(t.dom,d); } if(t.data.hp>0) { t.data.poisonDmg=Math.floor(t.data.maxHp*0.05); t.data.poisonTurn=3; } setBar(t.dom,'hp',t.data.hp,t.data.maxHp); refreshUI(t); } } else if(type==='mountainBeast') { attacker.data.shield+=Math.floor(attacker.data.maxHp*0.4); attacker.data.controlImmune=2; showHeal(attacker.dom,Math.floor(attacker.data.maxHp*0.4)); for(let h of getTeam('hero')) { h.data.tauntedBy=attacker.data; h.data.tauntTurn=1; refreshUI(h); } } else if(type==='shadowHunter') { const target=findLowestHpEnemy(attacker.team); if(target) { const res=calcDamage(attacker.data,target.data,2.5); if(!res.isDodge) { let d=res.dmg; if(target.data.shield>0) { if(target.data.shield>=d) { target.data.shield-=d; d=0; } else { d-=target.data.shield; target.data.shield=0; } } target.data.hp-=d; showDamage(target.dom,d); if(target.data.hp>0) { target.data.defDebuff=0.5; target.data.defDebuffTurn=2; } setBar(target.dom,'hp',target.data.hp,target.data.maxHp); refreshUI(target); } if(target.data.hp<=0) { attacker.data.spdProgress=100; setSpdBar(attacker.dom,100); } } } else if(type==='vineGuardian') { for(let u of getTeam('enemy')) { const heal=Math.floor(u.data.maxHp*0.25); u.data.hp=Math.min(u.data.maxHp,u.data.hp+heal); showHeal(u.dom,heal); u.data.stun=0; u.data.poisonDmg=0; u.data.poisonTurn=0; u.data.linkDebuff.isLinked=false; u.data.defDebuff=0; u.data.tauntedBy=null; u.data.sleepStack=0; u.data.defBuff=0.2; u.data.defBuffTurn=2; setBar(u.dom,'hp',u.data.hp,u.data.maxHp); refreshUI(u); } } attacker.data.mp=0; setBar(attacker.dom,'mp',0,ULT_MAX_MP); body.classList.remove('ult-anim'); return; } if(attacker.data.isWindDragon) { const enemies=getTeam('enemy').slice(0,3); const key=Date.now().toString(); for(let e of enemies) { if(battleOver) break; await createProjectile(attacker,e,'#44ccff',20,0.28); e.data.linkDebuff={isLinked:true,linkTurn:2,linkGroupKey:key}; refreshUI(e); } attacker.data.mp=0; } else if(attacker.data.isWobbuffet) { body.classList.add('heal-anim'); const heal=Math.floor(attacker.data.maxHp*0.35); attacker.data.hp=Math.min(attacker.data.maxHp,attacker.data.hp+heal); showHeal(attacker.dom,heal); attacker.data.mp=0; } else if(attacker.data.isShark) { body.classList.add('shark-ult-charge'); await sleep(350); body.classList.remove('shark-ult-charge'); let count=1; showCombo(count); let loop=true; while(loop && !battleOver) { const t=findTarget(attacker); if(!t) break; const {proc90}=await doAttack(attacker,t,{isSharkUlt:true}); if(!proc90) { loop=false; attacker.data.mp=0; } else { count++; showCombo(count); await sleep(100); } } await meleeReturn(attacker,0.16); removeCombo(); attacker.data.mp=0; } else if(attacker.data.isMantis) { const arena=document.createElement('div'); arena.className='duel-arena-overlay'; arena.innerHTML='<div class="duel-vs-text">VS</div>'; battleWrap.appendChild(arena); requestAnimationFrame(()=>arena.classList.add('active')); await sleep(600); arena.classList.remove('active'); arena.remove(); const target=findTarget(attacker); if(!target) return; attacker.data.mp=0; attacker.data.hp=Math.floor(attacker.data.hp*0.5); setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp); attacker.data.duelState.inDuel=true; for(let i=0;i<8&&!battleOver;i++) { await meleeCharge(attacker,target,0.14,false); await doAttack(attacker,target,{forceDouble:true}); await meleeReturn(attacker,0.14); if(target.data.hp<=0) break; const {dmg}=calcDamage(target.data,attacker.data,1); let reflectDmg=dmg; if(attacker.data.duelState.inDuel) reflectDmg*=2; if(attacker.data.shield>0) { if(attacker.data.shield>=reflectDmg) { attacker.data.shield-=reflectDmg; reflectDmg=0; } else { reflectDmg-=attacker.data.shield; attacker.data.shield=0; } } attacker.data.hp-=reflectDmg; showDamage(attacker.dom,reflectDmg); setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp); if(reflectDmg>0) reduceSleep(attacker); if(attacker.data.hp<=0) { attacker.data.hp=1; attacker.data.duelState.inDuel=false; break; } await sleep(200); } attacker.data.duelState.inDuel=false; } else if(attacker.data.isThunderPikachu) { await showThunderAnimation(); if(battleOver) return; const enemies=getTeam('enemy'); for(let e of enemies) { if(battleOver) break; if(e.data.hp<=0) continue; const {dmg,isDodge}=calcDamage(attacker.data,e.data,0.9); if(!isDodge) { let realDmg=dmg; if(e.data.shield>0) { if(e.data.shield>=realDmg) { e.data.shield-=realDmg; realDmg=0; } else { realDmg-=e.data.shield; e.data.shield=0; } } e.data.hp-=realDmg; showDamage(e.dom,realDmg); setBar(e.dom,'hp',e.data.hp,e.data.maxHp); if(realDmg>0) reduceSleep(e); if(e.data.hp>0) { e.data.sleepStack+=1; showFloating(e.dom,'💤 +1','sleep-text'); } refreshUI(e); } await sleep(100); } attacker.data.mp=0; if(!battleOver && Math.random()<0.3) { const target=findTarget(attacker); if(target && !battleOver) { await sleep(200); await doAttack(attacker,target,{}); } } } if(!battleOver) { setBar(attacker.dom,'mp',attacker.data.mp,ULT_MAX_MP); body.classList.remove('ult-anim','heal-anim','shark-ult-charge'); } }
+        async function doUlt(attacker) { if(battleOver) return; const body=attacker.dom.querySelector('.unit-body'); body.classList.add('ult-anim'); screenFlash(); await sleep(300); if(battleOver) { body.classList.remove('ult-anim'); return; } if(attacker.team==='enemy') { const type=attacker.data.enemyType; playScreenEffect(type); if(type==='hardenedFish') { const sv=Math.floor(attacker.data.maxHp*0.3); attacker.data.shield+=sv; attacker.data.reflectDmgPct=0.4; attacker.data.reflectTurn=2; showHeal(attacker.dom,sv); } else if(type==='reviveBoss') { const dead=unitList.filter(u=>u.team==='enemy' && u.data.hp<=0); if(dead.length) { const t=dead[Math.floor(Math.random()*dead.length)]; t.data.hp=t.data.maxHp; t.data.shield=0; t.data.mp=0; t.data.stun=0; t.data.poisonDmg=0; t.data.poisonTurn=0; t.data.linkDebuff.isLinked=false; t.data.defDebuff=0; t.data.tauntedBy=null; t.data.sleepStack=0; showHeal(t.dom,t.data.maxHp); setBar(t.dom,'hp',t.data.hp,t.data.maxHp); setBar(t.dom,'mp',0,ULT_MAX_MP); refreshUI(t); } else { for(let u of getTeam('enemy')) { const sv=Math.floor(u.data.maxHp*0.2); u.data.shield+=sv; showHeal(u.dom,sv); } } } else if(type==='corrosionMage') { for(let t of getTeam('hero')) { if(t.data.poisonTurn>0) { const burst=t.data.poisonTurn*t.data.poisonDmg; t.data.hp-=burst; showPoison(t.dom,burst); } const res=calcDamage(attacker.data,t.data,0.8); if(!res.isDodge && t.data.hp>0) { let d=res.dmg; if(t.data.shield>0) { if(t.data.shield>=d) { t.data.shield-=d; d=0; } else { d-=t.data.shield; t.data.shield=0; } } t.data.hp-=d; showDamage(t.dom,d); } if(t.data.hp>0) { t.data.poisonDmg=Math.floor(t.data.maxHp*0.05); t.data.poisonTurn=3; } setBar(t.dom,'hp',t.data.hp,t.data.maxHp); refreshUI(t); } } else if(type==='mountainBeast') { attacker.data.shield+=Math.floor(attacker.data.maxHp*0.4); attacker.data.controlImmune=2; showHeal(attacker.dom,Math.floor(attacker.data.maxHp*0.4)); for(let h of getTeam('hero')) { h.data.tauntedBy=attacker.data; h.data.tauntTurn=1; refreshUI(h); } } else if(type==='shadowHunter') { const target=findLowestHpEnemy(attacker.team); if(target) { const res=calcDamage(attacker.data,target.data,2.5); if(!res.isDodge) { let d=res.dmg; if(target.data.shield>0) { if(target.data.shield>=d) { target.data.shield-=d; d=0; } else { d-=target.data.shield; target.data.shield=0; } } target.data.hp-=d; showDamage(target.dom,d); if(target.data.hp>0) { target.data.defDebuff=0.5; target.data.defDebuffTurn=2; } setBar(target.dom,'hp',target.data.hp,target.data.maxHp); refreshUI(target); } if(target.data.hp<=0) { attacker.data.spdProgress=100; setSpdBar(attacker.dom,100); } } } else if(type==='vineGuardian') { for(let u of getTeam('enemy')) { const heal=Math.floor(u.data.maxHp*0.25); u.data.hp=Math.min(u.data.maxHp,u.data.hp+heal); showHeal(u.dom,heal); u.data.stun=0; u.data.poisonDmg=0; u.data.poisonTurn=0; u.data.linkDebuff.isLinked=false; u.data.defDebuff=0; u.data.tauntedBy=null; u.data.sleepStack=0; u.data.defBuff=0.2; u.data.defBuffTurn=2; setBar(u.dom,'hp',u.data.hp,u.data.maxHp); refreshUI(u); } } attacker.data.mp=0; setBar(attacker.dom,'mp',0,ULT_MAX_MP); body.classList.remove('ult-anim'); return; } if(attacker.data.isWindDragon) { const enemies=getTeam('enemy').slice(0,3); const key=Date.now().toString(); for(let e of enemies) { if(battleOver) break; await createProjectile(attacker,e,'#44ccff',20,0.28); e.data.linkDebuff={isLinked:true,linkTurn:2,linkGroupKey:key}; refreshUI(e); } attacker.data.mp=0; } else if(attacker.data.isWobbuffet) { body.classList.add('heal-anim'); const heal=Math.floor(attacker.data.maxHp*0.35); attacker.data.hp=Math.min(attacker.data.maxHp,attacker.data.hp+heal); showHeal(attacker.dom,heal); attacker.data.mp=0; } else if(attacker.data.isShark) { body.classList.add('shark-ult-charge'); await sleep(350); body.classList.remove('shark-ult-charge'); let count=1; showCombo(count); let loop=true; while(loop && !battleOver) { const t=findTarget(attacker); if(!t) break; const {proc90}=await doAttack(attacker,t,{isSharkUlt:true}); if(!proc90) { loop=false; attacker.data.mp=0; } else { count++; showCombo(count); await sleep(100); } } await meleeReturn(attacker,0.16); removeCombo(); attacker.data.mp=0; } else if(attacker.data.isMantis) {
+                    const target=findTarget(attacker);
+                    if(!target) return;
+                    attacker.data.mp=0;
+
+                    const createArena = () => {
+                        const arena=document.createElement('div');
+                        arena.style.cssText='position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;pointer-events:none;';
+                        arena.innerHTML=`
+                            <div style="position:absolute;inset:20px;border:3px solid rgba(255,80,80,0.6);border-radius:16px;animation: arena-pulse 1s ease-in-out infinite;"></div>
+                            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60%;height:2px;background:linear-gradient(90deg,transparent,#ff4444,transparent);animation: combat-line 0.6s ease-out forwards;"></div>
+                            <div style="font-size:80px;font-weight:900;color:#ff3333;text-shadow:0 0 30px #ff0000,0 0 60px #ff0000;animation: vs-flash 0.6s ease-out forwards;z-index:31;">VS</div>
+                        `;
+                        battleWrap.appendChild(arena);
+                        return arena;
+                    };
+
+                    const arena=createArena();
+                    screenFlash();
+                    await sleep(400);
+
+                    attacker.data.hp=Math.floor(attacker.data.hp*0.5);
+                    setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp);
+                    attacker.data.duelState.inDuel=true;
+                    refreshUI(attacker);
+
+                    await sleep(300);
+                    arena.remove();
+
+                    const mantisBody=attacker.dom.querySelector('.unit-body');
+                    const targetBody=target.dom.querySelector('.unit-body');
+
+                    const createAfterimage = (unit) => {
+                        const body=unit.dom.querySelector('.unit-body');
+                        const img=body.querySelector('img');
+                        const ai=document.createElement('div');
+                        ai.style.cssText=`position:absolute;width:70px;height:70px;left:${body.offsetLeft}px;top:${body.offsetTop}px;z-index:4;pointer-events:none;`;
+                        ai.innerHTML=`<img src="${img.src}" style="width:100%;height:100%;object-fit:contain;animation: mantis-afterimage 0.35s ease forwards;filter:brightness(0.6) blur(2px);">`;
+                        unit.dom.appendChild(ai);
+                        setTimeout(()=>ai.remove(),350);
+                    };
+
+                    const createSlash = (targetUnit) => {
+                        const center=getUnitCenter(targetUnit);
+                        const slash=document.createElement('div');
+                        slash.style.cssText=`position:absolute;left:${center.x-20}px;top:${center.y-30}px;width:40px;height:80px;z-index:20;pointer-events:none;`;
+                        slash.innerHTML=`<svg viewBox="0 0 40 80" style="width:100%;height:100%;animation: mantis-slash 0.35s ease forwards;">
+                            <defs>
+                                <linearGradient id="slashGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1;" />
+                                    <stop offset="50%" style="stop-color:#ff8888;stop-opacity:0.8;" />
+                                    <stop offset="100%" style="stop-color:#ff4444;stop-opacity:0;" />
+                                </linearGradient>
+                            </defs>
+                            <path d="M5,5 L35,75 M35,5 L5,75" stroke="url(#slashGrad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        </svg>`;
+                        battleWrap.appendChild(slash);
+                        setTimeout(()=>slash.remove(),350);
+                    };
+
+                    const doDuelAttack = async () => {
+                        if(battleOver) return false;
+
+                        createAfterimage(attacker);
+                        mantisBody.style.transition='transform 0.15s cubic-bezier(0.25,0.8,0.25,1.2)';
+                        mantisBody.style.transform='translateX(30px) scale(1.1)';
+                        await sleep(120);
+
+                        mantisBody.style.transform='translateX(0) scale(1)';
+                        mantisBody.style.transition='transform 0.1s ease-out';
+                        mantisBody.classList.add('attack-anim');
+
+                        createSlash(target);
+                        await sleep(80);
+
+                        const mul=1.2;
+                        const {dmg,isDodge}=calcDamage(attacker.data,target.data,mul);
+                        if(!isDodge) {
+                            let realDmg=dmg;
+                            if(target.data.shield>0) {
+                                if(target.data.shield>=realDmg) { target.data.shield-=realDmg; realDmg=0; }
+                                else { realDmg-=target.data.shield; target.data.shield=0; }
+                            }
+                            target.data.hp-=realDmg;
+                            target.dom.classList.add('hurt-anim');
+                            showDamage(target.dom,realDmg);
+                            setBar(target.dom,'hp',target.data.hp,target.data.maxHp);
+                            if(realDmg>0) reduceSleep(target);
+                            refreshUI(target);
+                        }
+
+                        await sleep(100);
+                        mantisBody.classList.remove('attack-anim');
+                        mantisBody.style.transition='';
+
+                        return !isDodge;
+                    };
+
+                    for(let i=0;i<8&&!battleOver;i++) {
+                        if(battleOver) break;
+
+                        const hit=await doDuelAttack();
+                        if(battleOver) break;
+
+                        if(target.data.hp<=0) {
+                            battleWrap.classList.add('duel-shake');
+                            setTimeout(()=>battleWrap.classList.remove('duel-shake'),400);
+                            break;
+                        }
+
+                        if(hit) {
+                            const {dmg}=calcDamage(target.data,attacker.data,1);
+                            let reflectDmg=dmg;
+                            if(attacker.data.duelState.inDuel) reflectDmg*=2;
+                            if(attacker.data.shield>0) {
+                                if(attacker.data.shield>=reflectDmg) { attacker.data.shield-=reflectDmg; reflectDmg=0; }
+                                else { reflectDmg-=attacker.data.shield; attacker.data.shield=0; }
+                            }
+                            attacker.data.hp-=reflectDmg;
+                            showDamage(attacker.dom,reflectDmg);
+                            setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp);
+                            if(reflectDmg>0) reduceSleep(attacker);
+                            refreshUI(attacker);
+
+                            if(attacker.data.hp<=0) {
+                                attacker.data.hp=1;
+                                attacker.data.duelState.inDuel=false;
+                                break;
+                            }
+                        }
+                        await sleep(120);
+                    }
+
+                    attacker.data.duelState.inDuel=false;
+                    refreshUI(attacker);
+
+                    if(target.data.hp<=0) {
+                        mantisBody.classList.add('attack-anim');
+                        await sleep(300);
+                        mantisBody.classList.remove('attack-anim');
+                    }
+                } else if(attacker.data.isThunderPikachu) { await showThunderAnimation(); if(battleOver) return; const enemies=getTeam('enemy'); for(let e of enemies) { if(battleOver) break; if(e.data.hp<=0) continue; const {dmg,isDodge}=calcDamage(attacker.data,e.data,0.9); if(!isDodge) { let realDmg=dmg; if(e.data.shield>0) { if(e.data.shield>=realDmg) { e.data.shield-=realDmg; realDmg=0; } else { realDmg-=e.data.shield; e.data.shield=0; } } e.data.hp-=realDmg; showDamage(e.dom,realDmg); setBar(e.dom,'hp',e.data.hp,e.data.maxHp); if(realDmg>0) reduceSleep(e); if(e.data.hp>0) { e.data.sleepStack+=1; showFloating(e.dom,'💤 +1','sleep-text'); } refreshUI(e); } await sleep(100); } attacker.data.mp=0; if(!battleOver && Math.random()<0.3) { const target=findTarget(attacker); if(target && !battleOver) { await sleep(200); await doAttack(attacker,target,{}); } } } if(!battleOver) { setBar(attacker.dom,'mp',attacker.data.mp,ULT_MAX_MP); body.classList.remove('ult-anim','heal-anim','shark-ult-charge'); } }
         function showCombo(count) { if(comboEl) comboEl.remove(); const div=document.createElement('div'); div.className='combo-display'; div.innerHTML=`<div class="combo-count">连击 x${count}</div><div class="combo-label">${count>=8?'疯狂连击！':count>=5?'超强连击！':''}</div>`; battleWrap.appendChild(div); comboEl=div; }
         function removeCombo() { if(comboEl) { comboEl.remove(); comboEl=null; } }
         function tickEffects() { unitList.forEach(u=>{ if(u.data.hp<=0) return; if(u.data.poisonTurn>0) { u.data.hp-=u.data.poisonDmg; showPoison(u.dom,u.data.poisonDmg); reduceSleep(u); u.data.poisonTurn--; if(u.data.poisonTurn<=0) u.data.poisonDmg=0; } if(u.data.reflectTurn>0) { u.data.reflectTurn--; if(u.data.reflectTurn<=0) u.data.reflectDmgPct=0; } if(u.data.tauntTurn>0) { u.data.tauntTurn--; if(u.data.tauntTurn<=0) u.data.tauntedBy=null; } if(u.data.defDebuffTurn>0) { u.data.defDebuffTurn--; if(u.data.defDebuffTurn<=0) u.data.defDebuff=0; } if(u.data.defBuffTurn>0) { u.data.defBuffTurn--; if(u.data.defBuffTurn<=0) u.data.defBuff=0; } if(u.data.controlImmune>0) u.data.controlImmune--; if(u.data.linkDebuff.isLinked) { u.data.linkDebuff.linkTurn--; if(u.data.linkDebuff.linkTurn<=0) u.data.linkDebuff.isLinked=false; } if(u.data.stun>0) u.data.stun--; setBar(u.dom,'hp',u.data.hp,u.data.maxHp); refreshUI(u); }); }
