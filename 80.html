@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>回合战斗·位置与空位修复</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg: #0f0f1a;
+            --card: #1a1a2e;
+            --gold: #f0c060;
+            --accent: #4a90d9;
+            --danger: #e05555;
+            --success: #4caf84;
+            --text: #e0e0e0;
+            --text2: #a0a0b8;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a14; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+        .app-container { width: 400px; height: 820px; background: var(--bg); border-radius: 20px; position: relative; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 0 0 2px #2a2a3a; }
+        .view { position: absolute; inset: 0; display: none; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+        .view.active { display: flex; }
+        .view::-webkit-scrollbar { width: 4px; }
+        .view::-webkit-scrollbar-thumb { background: #3a3a50; border-radius: 4px; }
+        #prepareView { background: linear-gradient(180deg, #1a1a30 0%, #0f0f1a 30%); padding: 16px; gap: 14px; }
+        .header-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }
+        .header-title { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+        .header-title span { color: var(--gold); }
+        .formation-zone { background: var(--card); border-radius: 16px; padding: 16px 12px; border: 2px solid #2a2a40; display: flex; flex-direction: column; gap: 14px; }
+        .formation-row { display: flex; align-items: center; gap: 10px; justify-content: center; }
+        .formation-label { font-size: 12px; color: var(--text2); width: 36px; text-align: center; font-weight: 600; letter-spacing: 1px; flex-shrink: 0; }
+        .slot { width: 72px; height: 92px; background: #1a1a2a; border-radius: 14px; border: 2px dashed #3a3a50; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; position: relative; flex-shrink: 0; }
+        .slot:hover { border-color: #6a6a90; background: #222238; }
+        .slot.filled { border-style: solid; border-color: #4a4a60; background: #1e1e32; }
+        .slot.selected { border-color: var(--gold) !important; box-shadow: 0 0 18px rgba(240,192,96,0.45); animation: slot-glow 0.8s ease infinite; }
+        @keyframes slot-glow { 0%,100% { box-shadow: 0 0 10px rgba(240,192,96,0.3); } 50% { box-shadow: 0 0 24px rgba(240,192,96,0.7); } }
+        .slot img { width: 46px; height: 46px; object-fit: contain; pointer-events: none; }
+        .slot .slot-name { font-size: 10px; color: #ccc; margin-top: 2px; pointer-events: none; text-align: center; line-height: 1.1; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .slot .slot-remove { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; background: #e05555; border-radius: 50%; color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity 0.2s; pointer-events: auto; z-index: 2; }
+        .slot.filled:hover .slot-remove { opacity: 1; }
+        .bench-zone { background: var(--card); border-radius: 16px; padding: 14px; border: 2px solid #2a2a40; }
+        .bench-title { font-size: 13px; color: var(--text2); margin-bottom: 10px; font-weight: 600; letter-spacing: 1px; }
+        .bench-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .bench-card { width: 66px; height: 82px; background: #1a1a2a; border-radius: 12px; border: 2px solid #333350; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; position: relative; }
+        .bench-card:hover { border-color: #5a5a80; background: #222238; }
+        .bench-card.in-team { opacity: 0.35; pointer-events: none; border-color: #333; }
+        .bench-card img { width: 40px; height: 40px; object-fit: contain; pointer-events: none; }
+        .bench-card .bench-name { font-size: 10px; color: #aaa; margin-top: 2px; pointer-events: none; text-align: center; line-height: 1.1; }
+        .btn-row { display: flex; gap: 10px; }
+        .btn-primary { flex:1; padding:14px; border-radius:14px; border:none; font-size:15px; font-weight:700; cursor:pointer; letter-spacing:1px; transition:all 0.2s; color:#fff; background: linear-gradient(135deg,#4a90d9,#357abd); box-shadow:0 4px 15px rgba(74,144,217,0.3); }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(74,144,217,0.5); }
+        .btn-secondary { flex:1; padding:14px; border-radius:14px; border:2px solid #4a4a60; font-size:15px; font-weight:700; cursor:pointer; letter-spacing:1px; transition:all 0.2s; color:#ccc; background:transparent; }
+        .btn-secondary:hover { border-color:#7a7a90; color:#fff; }
+        #dungeonView { background: linear-gradient(180deg, #1a1a30 0%, #0f0f1a 30%); padding: 16px; gap: 14px; }
+        .dungeon-card { background: var(--card); border-radius: 16px; padding: 18px; border: 2px solid #2a2a40; cursor: pointer; transition: all 0.25s; display: flex; align-items: center; gap: 16px; }
+        .dungeon-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 8px 25px rgba(240,192,96,0.2); }
+        .dungeon-icon { width:56px; height:56px; background: linear-gradient(135deg,#2a2a40,#1a1a30); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:30px; flex-shrink:0; }
+        .dungeon-info { flex:1; }
+        .dungeon-name { font-size:16px; font-weight:700; color:#fff; }
+        .dungeon-desc { font-size:12px; color:var(--text2); margin-top:2px; }
+        .dungeon-badge { font-size:11px; background:#2a2a40; color:#ffcc00; padding:4px 10px; border-radius:20px; font-weight:600; }
+        #battleView { background: #111; overflow: hidden; }
+        .battle-wrap { width:100%; height:100%; background: url('image/battle-bg2.png') center/cover no-repeat; position: relative; }
+        .unit { position: absolute; width: 90px; height: 110px; transition: left 0.22s cubic-bezier(0.25,0.8,0.25,1.2), top 0.22s cubic-bezier(0.25,0.8,0.25,1.2); z-index: 5; }
+        .unit-body { width:70px; height:70px; margin:0 auto; display:flex; align-items:center; justify-content:center; font-size:34px; position:relative; z-index:2; background:transparent !important; animation: idle-float 3s ease-in-out infinite; }
+        .unit-body img { display:block; width:100%; height:100%; object-fit:contain; border:none; background:transparent !important; -webkit-user-drag:none; user-select:none; pointer-events:none; }
+        @keyframes idle-float { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-3px); } }
+        @keyframes attack-scale { 0%{ transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 transparent); } 40%{ transform: scale(1.2); filter: brightness(1.3) drop-shadow(0 0 6px #ffcc44); } 100%{ transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 transparent); } }
+        .attack-anim { animation: attack-scale 0.3s ease; }
+        @keyframes ult-burst { 0%{ transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 transparent); } 50%{ transform: scale(1.4); filter: brightness(2) drop-shadow(0 0 25px #ffcc00); } 100%{ transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 transparent); } }
+        .ult-anim { animation: ult-burst 0.45s ease; }
+        @keyframes shark-charge-burst { 0%{ transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 #44aaff); } 30%{ transform: scale(1.55); filter: brightness(2.2) drop-shadow(0 0 35px #2299ff); } 70%{ transform: scale(1.45); filter: brightness(1.9) drop-shadow(0 0 28px #2299ff); } 100%{ transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 #44aaff); } }
+        .shark-ult-charge { animation: shark-charge-burst 0.5s ease; }
+        @keyframes shark-bite { 0%{ transform: scale(1.3) rotate(0deg); } 25%{ transform: scale(1.55) rotate(-10deg); } 50%{ transform: scale(1.5) rotate(8deg); } 75%{ transform: scale(1.35) rotate(-4deg); } 100%{ transform: scale(1) rotate(0deg); } }
+        .shark-bite-anim { animation: shark-bite 0.35s ease; }
+        @keyframes heal-glow { 0%{ filter: drop-shadow(0 0 0 rgba(80,255,120,0)); } 50%{ filter: drop-shadow(0 0 15px rgba(80,255,120,0.8)); } 100%{ filter: drop-shadow(0 0 0 rgba(80,255,120,0)); } }
+        .heal-anim { animation: heal-glow 0.45s ease; }
+        @keyframes hurt-shake { 0%,100%{ transform: translateX(0); } 25%{ transform: translateX(-5px); } 75%{ transform: translateX(5px); } }
+        .hurt-anim { animation: hurt-shake 0.2s ease; }
+        @keyframes screen-flash { 0%{ background: rgba(255,255,255,0); } 40%{ background: rgba(255,240,180,0.4); } 100%{ background: rgba(255,255,255,0); } }
+        .screen-flash { animation: screen-flash 0.5s ease; }
+        .slash { position:absolute; font-size:40px; color:#ffeeee; text-shadow:0 0 8px #fff; pointer-events:none; animation: slash-mark 0.5s ease forwards; z-index:16; }
+        @keyframes slash-mark { 0%{ opacity:0; transform:scale(0.5) rotate(-15deg); } 30%{ opacity:1; transform:scale(1) rotate(-8deg); } 100%{ opacity:0; transform:scale(1.1) rotate(-8deg); } }
+        .damage-text,.heal-text,.reflect-text,.poison-text,.sleep-text { position:absolute; font-weight:900; text-shadow:0 0 6px #000; animation: damage-float 0.8s ease forwards; pointer-events:none; z-index:16; }
+        .damage-text { color:#ff3333; font-size:24px; } .heal-text { color:#4cf272; font-size:24px; } .reflect-text { color:#ffdd44; font-size:24px; } .poison-text { color:#c044ee; font-size:22px; } .sleep-text { color:#66ccff; font-size:22px; }
+        @keyframes damage-float { 0%{ opacity:1; transform:translateY(0); } 100%{ opacity:0; transform:translateY(-50px); } }
+        .impact-burst { position:absolute; pointer-events:none; z-index:19; border-radius:50%; animation: projectile-impact-burst 0.35s ease forwards; }
+        @keyframes projectile-impact-burst { 0%{ transform: scale(0.3); opacity:1; } 100%{ transform: scale(2.5); opacity:0; } }
+        .shark-trail-particle { position:absolute; pointer-events:none; z-index:14; border-radius:50%; animation: shark-trail-fade 0.5s ease forwards; }
+        @keyframes shark-trail-fade { 0%{ opacity:0.9; transform: scale(1); } 100%{ opacity:0; transform: scale(0.2) translateY(-20px); } }
+        .duel-arena-overlay { position:absolute; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background: rgba(10,5,5,0); pointer-events:none; transition: background 0.3s; }
+        .duel-arena-overlay.active { background: rgba(20,0,0,0.8); }
+        .duel-vs-text { font-size:72px; font-weight:900; color:#ff3333; animation: vs-slam 0.5s ease forwards; text-shadow:0 0 30px #ff0000; }
+        @keyframes vs-slam { 0%{ opacity:0; transform:scale(3) rotate(-15deg); } 60%{ opacity:1; transform:scale(0.9) rotate(3deg); } 100%{ opacity:1; transform:scale(1) rotate(0deg); } }
+        .thunder-overlay { position:absolute; inset:0; z-index:35; pointer-events:none; background: rgba(255,255,255,0.9); animation: thunder-strike 0.4s ease-out forwards; }
+        @keyframes thunder-strike { 0%{ background: rgba(255,255,255,0.95); } 20%{ background: rgba(255,255,200,0.8); } 100%{ background: rgba(255,255,255,0); } }
+        .thunder-icon { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:100px; color:#ffcc00; text-shadow:0 0 30px #ffaa00; animation: thunder-icon-pop 0.5s ease-out forwards; z-index:36; }
+        @keyframes thunder-icon-pop { 0%{ transform:translate(-50%,-50%) scale(0); opacity:0; } 50%{ transform:translate(-50%,-50%) scale(1.3); opacity:1; } 100%{ transform:translate(-50%,-50%) scale(1); opacity:0; } }
+        .bar-wrap { width:70px; height:5px; background:rgba(0,0,0,0.5); margin:2px auto; border-radius:3px; overflow:hidden; }
+        .hp-fill { height:100%; background:#39d353; transition: width 0.3s ease; }
+        .mp-fill { height:100%; background:#40a9ff; transition: width 0.15s linear; }
+        .spd-bar-wrap { width:70px; height:3px; background:rgba(0,0,0,0.3); margin:1px auto 0; }
+        .spd-fill { height:100%; background:#ffbc42; width:0%; transition: width 0.15s linear; }
+        .die { opacity:0.25; pointer-events:none; filter:grayscale(1); }
+        .stun-mark .unit-body { outline:3px solid #9966ff; outline-offset:3px; border-radius:50%; }
+        .sleep-mark .unit-body { outline:3px solid #66ccff; outline-offset:3px; border-radius:50%; animation: sleep-pulse 0.8s ease infinite; }
+        @keyframes sleep-pulse { 0%,100%{ outline-color: #66ccff; outline-width:3px; } 50%{ outline-color: #99ddff; outline-width:5px; } }
+        .shield-mark .unit-body { box-shadow:0 0 0 4px rgba(100,200,255,0.5); border-radius:50%; }
+        .reflect-mark .unit-body { box-shadow:0 0 0 4px rgba(255,200,50,0.7); border-radius:50%; animation: reflect-glow 0.5s ease infinite; }
+        @keyframes reflect-glow { 0%,100%{ box-shadow:0 0 0 4px rgba(255,200,50,0.5); } 50%{ box-shadow:0 0 0 8px rgba(255,180,30,0.8); } }
+        .poison-mark .unit-body { outline:3px solid #b044dd; outline-offset:3px; border-radius:50%; animation: poison-pulse 0.8s ease infinite; }
+        @keyframes poison-pulse { 0%,100%{ outline-color: #b044dd; outline-width:3px; } 50%{ outline-color: #dd66ff; outline-width:5px; } }
+        .taunt-mark .unit-body { box-shadow:0 0 0 5px rgba(255,100,40,0.8); border-radius:50%; animation: taunt-pulse 0.6s ease infinite; }
+        @keyframes taunt-pulse { 0%,100%{ box-shadow:0 0 0 5px rgba(255,100,40,0.6); } 50%{ box-shadow:0 0 0 10px rgba(255,80,20,0.9); } }
+        .link-mark .unit-body { box-shadow:0 0 0 4px rgba(120,180,255,0.6); border-radius:50%; }
+        .duel-mark .unit-body { box-shadow:0 0 0 4px rgba(255,80,80,0.7); border-radius:50%; }
+        .link-line-layer { position:absolute; inset:0; pointer-events:none; z-index:7; }
+        .link-line { stroke:rgba(130,190,255,0.7); stroke-width:2; fill:none; stroke-dasharray:4 4; }
+        .btn-area { position:absolute; bottom:30px; width:100%; display:flex; justify-content:center; gap:10px; align-items:center; flex-wrap:wrap; z-index:40; }
+        .btn { padding:8px 18px; background:#217bdd; color:white; border-radius:99px; border:none; font-size:14px; cursor:pointer; }
+        .btn.stop { background:#dd3333; } .btn-succ { background:#22aa66; }
+        .speed-btn { padding:6px 14px; background:#444; color:white; border-radius:99px; border:none; font-size:13px; cursor:pointer; }
+        .speed-btn.active { background:#ffaa00; color:#000; font-weight:bold; }
+        .result-tip { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.9); padding:24px 32px; border-radius:16px; text-align:center; z-index:50; display:none; border:2px solid #4a4a60; }
+        .combo-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 25; pointer-events: none; text-align: center; }
+        .combo-count { font-size: 40px; font-weight: 900; color: #fff; text-shadow: 0 0 15px #44aaff; animation: combo-slam 0.3s ease forwards; }
+        @keyframes combo-slam { 0%{ transform: scale(2); opacity:0; } 50%{ transform: scale(0.9); opacity:1; } 100%{ transform: scale(1); opacity:1; } }
+        .combo-label { font-size:14px; color:#88ccff; text-shadow:1px 1px #000; letter-spacing:3px; }
+        .thorns-screen { animation: thorns-spawn 0.6s ease forwards; }
+        @keyframes thorns-spawn { 0%{ background: radial-gradient(circle, rgba(255,200,0,0.4) 0%, transparent 70%); } 50%{ background: radial-gradient(circle, rgba(255,200,0,0.6) 0%, transparent 70%); } 100%{ background: radial-gradient(circle, rgba(255,200,0,0) 0%, transparent 70%); } }
+        .revive-circle-anim { animation: revive-circle 0.7s ease forwards; }
+        @keyframes revive-circle { 0%{ transform: scale(0); opacity:0; } 50%{ transform: scale(1.2); opacity:1; } 100%{ transform: scale(1); opacity:0; } }
+        .acid-rain-screen { animation: acid-rain 0.5s ease; }
+        @keyframes acid-rain { 0%{ background: transparent; } 50%{ background: rgba(100,0,150,0.3); } 100%{ background: transparent; } }
+        .earthquake-screen { animation: earthquake 0.4s ease; }
+        @keyframes earthquake { 0%{ transform: translate(0,0); } 25%{ transform: translate(5px,-5px); } 50%{ transform: translate(-5px,5px); } 75%{ transform: translate(3px,-3px); } 100%{ transform: translate(0,0); } }
+        .crosshair-anim { animation: mark-crosshair 0.5s ease forwards; }
+        @keyframes mark-crosshair { 0%{ opacity:0; transform:scale(0.2); } 50%{ opacity:1; transform:scale(1.1); } 100%{ opacity:0; transform:scale(1); } }
+        .vine-border-screen { border:4px solid transparent; animation: vine-grow 0.6s ease forwards; }
+        @keyframes vine-grow { 0%{ border-color:transparent; box-shadow:0 0 0 0 rgba(0,255,0,0); } 50%{ border-color:#44dd44; box-shadow:0 0 20px #22aa22; } 100%{ border-color:transparent; box-shadow:0 0 0 0 rgba(0,255,0,0); } }
+        .grass { position:absolute; width:60px; height:120px; background:#2d703088; border-radius:10px; }
+        .unit-name { text-align:center; color:white; font-size:12px; margin-top:2px; text-shadow:1px 1px #000; }
+    </style>
+</head>
+<body>
+<div class="app-container" id="appContainer">
+    <!-- 备战界面 -->
+    <div class="view active" id="prepareView">
+        <div class="header-row">
+            <div class="header-title">⚔️ <span>布阵</span></div>
+            <div style="font-size:12px;color:#888;">点击槽位交换位置</div>
+        </div>
+        <div class="formation-zone" id="formationZone">
+            <div class="formation-row">
+                <div class="formation-label">前排</div>
+                <div class="slot" data-slot="0"></div>
+                <div class="slot" data-slot="1"></div>
+                <div class="slot" data-slot="2"></div>
+            </div>
+            <div class="formation-row">
+                <div class="formation-label">后排</div>
+                <div class="slot" data-slot="3"></div>
+                <div class="slot" data-slot="4"></div>
+                <div class="slot" data-slot="5"></div>
+            </div>
+        </div>
+        <div class="bench-zone">
+            <div class="bench-title">📋 精灵库 · 点击上阵到选中槽位</div>
+            <div class="bench-grid" id="benchGrid"></div>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" id="btnClearTeam">清空阵容</button>
+            <button class="btn-primary" id="btnGoDungeon">进入副本 →</button>
+        </div>
+    </div>
+    <!-- 副本界面 -->
+    <div class="view" id="dungeonView">
+        <div class="header-row">
+            <div class="header-title">🏰 <span>副本</span></div>
+            <button class="btn-secondary" style="padding:8px 16px;font-size:13px;" id="btnBackPrepare">← 返回布阵</button>
+        </div>
+        <div class="dungeon-card" id="dungeonCard1">
+            <div class="dungeon-icon">💀</div>
+            <div class="dungeon-info">
+                <div class="dungeon-name">暗影森林</div>
+                <div class="dungeon-desc">复生BOSS统领的怪物军团</div>
+            </div>
+            <div class="dungeon-badge">推荐Lv.4</div>
+        </div>
+        <div style="color:#555;text-align:center;margin-top:20px;font-size:13px;">更多副本即将开放...</div>
+    </div>
+    <!-- 战斗界面 -->
+    <div class="view" id="battleView">
+        <div class="battle-wrap" id="battleWrap">
+            <div class="flash-layer" id="flashLayer"></div>
+            <svg class="link-line-layer" id="linkLineLayer"></svg>
+            <div class="absolute top-4 left-3 text-white text-lg z-10">推荐等级:4</div>
+            <div class="btn-area">
+                <button class="btn" id="pauseBtn">暂停战斗</button>
+                <div class="flex gap-2 items-center">
+                    <button class="speed-btn active" data-speed="1">1x</button>
+                    <button class="speed-btn" data-speed="2">2x</button>
+                    <button class="speed-btn" data-speed="3">3x</button>
+                </div>
+                <button class="btn" id="resetBtn">重置战斗</button>
+            </div>
+            <div class="result-tip" id="resultTip">
+                <h2 class="text-xl mb-3" id="resultText">胜利</h2>
+                <div class="flex gap-3 justify-center">
+                    <button class="btn btn-succ" id="restartBtn">再来一局</button>
+                    <button class="btn" style="background:#e05555;" id="btnExitBattle">退出</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function() {
+        const ALL_HEROES = [
+            { id: 'hero', name: '果然翁', img: 'image/果然翁.png', hp: 1200, maxHp: 1200, atk: 180, def: 60, spd: 6, attackType: 'melee', isWobbuffet: true, color: '#40c9ff', textColor: 'text-yellow-300' },
+            { id: 'windDragon', name: '风魔龙', img: 'image/风魔龙.png', hp: 1400, maxHp: 1400, atk: 150, def: 50, spd: 7, attackType: 'ranged', isWindDragon: true, critRate: 0.12, critDmg: 1.8, color: '#60b8ff', textColor: 'text-sky-300' },
+            { id: 'shark', name: '巨牙鲨', img: 'image/巨牙鲨 [魔].png', hp: 1300, maxHp: 1300, atk: 180, def: 45, spd: 8, attackType: 'melee', isShark: true, critRate: 0.15, critDmg: 1.9, dodgeRate: 0.05, color: '#3388dd', textColor: 'text-blue-300' },
+            { id: 'mantis', name: '决斗螳螂', img: 'image/决斗螳螂.png', hp: 1500, maxHp: 1500, atk: 170, def: 55, spd: 7.2, attackType: 'melee', isMantis: true, critRate: 0.14, critDmg: 1.85, dodgeRate: 0.08, color: '#dd4444', textColor: 'text-red-300' },
+            { id: 'pikachu', name: '闪光皮卡丘', img: 'image/雷霆龙.png', hp: 1600, maxHp: 1600, atk: 200, def: 40, spd: 7, attackType: 'ranged', isThunderPikachu: true, color: '#ffcc00', textColor: 'text-yellow-400' },
+        ];
+
+        let teamSlots = ['hero', 'windDragon', 'shark', 'mantis', 'pikachu', null];
+        let selectedSlot = null;
+
+        const prepareView = document.getElementById('prepareView');
+        const dungeonView = document.getElementById('dungeonView');
+        const battleView = document.getElementById('battleView');
+        const resultTip = document.getElementById('resultTip');
+        const resultText = document.getElementById('resultText');
+
+        function showView(view) {
+            [prepareView, dungeonView, battleView].forEach(v => v.classList.remove('active'));
+            view.classList.add('active');
+        }
+
+        const formationZone = document.getElementById('formationZone');
+        const benchGrid = document.getElementById('benchGrid');
+        const btnClearTeam = document.getElementById('btnClearTeam');
+        const btnGoDungeon = document.getElementById('btnGoDungeon');
+        const btnBackPrepare = document.getElementById('btnBackPrepare');
+
+        function renderPrepareUI() {
+            const slots = formationZone.querySelectorAll('.slot');
+            slots.forEach(slot => {
+                const idx = parseInt(slot.dataset.slot);
+                const heroId = teamSlots[idx];
+                slot.innerHTML = '';
+                slot.classList.remove('filled', 'selected');
+                if (heroId) {
+                    const hero = ALL_HEROES.find(h => h.id === heroId);
+                    if (hero) {
+                        slot.classList.add('filled');
+                        slot.innerHTML = `<img src="${hero.img}" alt="${hero.name}"><div class="slot-name">${hero.name}</div><div class="slot-remove" data-slot="${idx}">×</div>`;
+                    }
+                } else {
+                    slot.innerHTML = '<div style="color:#555;font-size:24px;">+</div>';
+                }
+                if (idx === selectedSlot) slot.classList.add('selected');
+            });
+
+            benchGrid.innerHTML = '';
+            ALL_HEROES.forEach(hero => {
+                const inTeam = teamSlots.includes(hero.id);
+                const card = document.createElement('div');
+                card.className = 'bench-card' + (inTeam ? ' in-team' : '');
+                card.innerHTML = `<img src="${hero.img}" alt="${hero.name}"><div class="bench-name">${hero.name}</div>`;
+                if (!inTeam) {
+                    card.addEventListener('click', () => {
+                        if (selectedSlot !== null) {
+                            teamSlots = teamSlots.map(s => s === hero.id ? null : s);
+                            teamSlots[selectedSlot] = hero.id;
+                            selectedSlot = null;
+                        } else {
+                            const emptyIdx = teamSlots.findIndex(s => !s);
+                            if (emptyIdx >= 0) teamSlots[emptyIdx] = hero.id;
+                        }
+                        renderPrepareUI();
+                    });
+                }
+                benchGrid.appendChild(card);
+            });
+
+            slots.forEach(slot => {
+                slot.onclick = (e) => {
+                    if (e.target.classList.contains('slot-remove')) return;
+                    const idx = parseInt(slot.dataset.slot);
+                    if (selectedSlot === null) {
+                        if (teamSlots[idx]) selectedSlot = idx;
+                    } else if (selectedSlot === idx) {
+                        selectedSlot = null;
+                    } else {
+                        const temp = teamSlots[selectedSlot];
+                        teamSlots[selectedSlot] = teamSlots[idx];
+                        teamSlots[idx] = temp;
+                        selectedSlot = null;
+                    }
+                    renderPrepareUI();
+                };
+            });
+
+            document.querySelectorAll('.slot-remove').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.dataset.slot);
+                    teamSlots[idx] = null;
+                    if (selectedSlot === idx) selectedSlot = null;
+                    renderPrepareUI();
+                };
+            });
+        }
+
+        btnClearTeam.addEventListener('click', () => { teamSlots = [null,null,null,null,null,null]; selectedSlot = null; renderPrepareUI(); });
+        btnGoDungeon.addEventListener('click', () => { if (teamSlots.filter(s=>s).length===0) { alert('请至少上阵一个精灵！'); return; } showView(dungeonView); });
+        btnBackPrepare.addEventListener('click', () => { showView(prepareView); });
+        document.getElementById('dungeonCard1').addEventListener('click', () => { if (teamSlots.filter(s=>s).length===0) { alert('请先上阵精灵！'); showView(prepareView); return; } startBattle(); });
+
+        // ================= 战斗系统 =================
+        const battleWrap = document.getElementById('battleWrap');
+        const flashLayer = document.getElementById('flashLayer');
+        const linkLineLayer = document.getElementById('linkLineLayer');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const btnExitBattle = document.getElementById('btnExitBattle');
+
+        let baseDelay = 1200, isPause = false, battleOver = false;
+        const ULT_MAX_MP = 100;
+        let unitList = [], comboEl = null;
+
+        document.querySelectorAll('.speed-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                baseDelay = [1200,600,400][parseInt(btn.dataset.speed)-1];
+            });
+        });
+
+        function sleep(ms) {
+            return new Promise(resolve => {
+                const start = Date.now();
+                const check = () => {
+                    if (battleOver) return resolve();
+                    if (isPause) { setTimeout(check, 100); }
+                    else { if (Date.now() - start >= ms) resolve(); else setTimeout(check, Math.min(ms - (Date.now()-start), 100)); }
+                };
+                check();
+            });
+        }
+
+        pauseBtn.onclick = () => { isPause = !isPause; pauseBtn.textContent = isPause ? '继续' : '暂停'; };
+        resetBtn.onclick = () => { battleOver = true; setTimeout(() => initBattle(), 200); };
+        restartBtn.onclick = () => { resultTip.style.display = 'none'; battleOver = true; setTimeout(() => initBattle(), 200); };
+        btnExitBattle.addEventListener('click', () => { battleOver = true; resultTip.style.display = 'none'; showView(prepareView); renderPrepareUI(); });
+
+        const baseStatus = () => ({ poisonDmg:0, poisonTurn:0, reflectDmgPct:0, reflectTurn:0, tauntedBy:null, tauntTurn:0, defDebuff:0, defDebuffTurn:0, defBuff:0, defBuffTurn:0, controlImmune:0, linkDebuff:{ isLinked:false, linkTurn:0, linkGroupKey:"" }, sleepStack:0 });
+
+        const enemyTemplates = {
+            e1: { hp:3600,maxHp:3600,mp:0,atk:90,def:40,spd:6, attackType:'melee', enemyType:'hardenedFish' },
+            eBoss: { hp:5600,maxHp:5600,mp:0,atk:120,def:60,spd:5.8, attackType:'melee', enemyType:'reviveBoss' },
+            e3: { hp:3600,maxHp:3600,mp:0,atk:90,def:35,spd:6.2, attackType:'ranged', enemyType:'corrosionMage' },
+            e4: { hp:4200,maxHp:4200,mp:0,atk:98,def:60,spd:5.5, attackType:'melee', enemyType:'mountainBeast' },
+            e5: { hp:3600,maxHp:3600,mp:0,atk:90,def:30,spd:7.5, attackType:'ranged', enemyType:'shadowHunter' },
+            e6: { hp:4800,maxHp:4800,mp:0,atk:105,def:65,spd:5.2, attackType:'ranged', enemyType:'vineGuardian' }
+        };
+
+        const enemyDefs = [
+            { id:'enemy1', left:'8%', top:'55px', name:'硬化杂鱼', img:'image/硬化杂鱼.png', key:'e1' },
+            { id:'enemyBoss', left:'37%', top:'55px', name:'复生BOSS', img:'image/复生BOSS.png', key:'eBoss' },
+            { id:'enemy3', left:'right:8%', top:'55px', name:'腐蚀法师', img:'image/腐蚀法师.png', key:'e3' },
+            { id:'enemy4', left:'8%', top:'170px', name:'山岭巨兽', img:'image/山岭巨兽.png', key:'e4' },
+            { id:'enemy5', left:'37%', top:'170px', name:'暗影猎手', img:'image/暗影猎手.png', key:'e5' },
+            { id:'enemy6', left:'right:8%', top:'170px', name:'古藤守护', img:'image/古藤守护.png', key:'e6' },
+        ];
+
+        // 6个槽位对应的固定战斗位置（前排3个，后排3个）
+        const heroPositions = [
+            { left:'8%', top:'400px' },
+            { left:'37%', top:'400px' },
+            { left:'right:8%', top:'400px' },
+            { left:'8%', top:'530px' },
+            { left:'37%', top:'530px' },
+            { left:'right:8%', top:'530px' },
+        ];
+
+        function getTeam(t) { return unitList.filter(u => u.team===t && u.data.hp>0); }
+        function setBar(dom,type,val,max) { const idx = type==='hp'?0:1; const fill = dom.querySelectorAll('.bar-wrap')[idx]?.querySelector(type==='hp'?'.hp-fill':'.mp-fill'); if(fill) fill.style.width = `${Math.max(0,val/max*100)}%`; }
+        function setSpdBar(dom,val) { const f = dom.querySelector('.spd-fill'); if(f) f.style.width = `${Math.min(100,val)}%`; }
+        function getUnitCenter(unit) { const body = unit.dom.querySelector('.unit-body'); const r = body.getBoundingClientRect(); const w = battleWrap.getBoundingClientRect(); return { x: r.left-w.left + r.width/2, y: r.top-w.top + r.height/2 }; }
+        function showFloating(dom,text,cls) { const r = dom.getBoundingClientRect(); const w = battleWrap.getBoundingClientRect(); const el = document.createElement('div'); el.className = cls; el.textContent = text; el.style.left = `${r.left-w.left + r.width/2 - 15}px`; el.style.top = `${r.top-w.top - 10}px`; battleWrap.appendChild(el); setTimeout(()=>el.remove(),800); }
+        function showDamage(d,v) { showFloating(d,`-${v}`,'damage-text'); }
+        function showHeal(d,v) { showFloating(d,`+${v}`,'heal-text'); }
+        function showReflect(d,v) { showFloating(d,`-${v}反`,'reflect-text'); }
+        function showPoison(d,v) { showFloating(d,`-${v}毒`,'poison-text'); }
+        function showSleepReduce(d) { showFloating(d,'💤 -1','sleep-text'); }
+        function reduceSleep(unit) { if(unit.data.sleepStack>0) { unit.data.sleepStack--; showSleepReduce(unit.dom); if(unit.data.sleepStack<=0) unit.data.sleepStack=0; refreshUI(unit); } }
+        function refreshUI(unit) { const d=unit.data, dom=unit.dom; dom.classList.remove('stun-mark','sleep-mark','shield-mark','reflect-mark','poison-mark','taunt-mark','link-mark','duel-mark','die'); if(d.hp<=0) dom.classList.add('die'); if(d.stun>0) dom.classList.add('stun-mark'); if(d.sleepStack>0) dom.classList.add('sleep-mark'); if(d.shield>0) dom.classList.add('shield-mark'); if(d.reflectTurn>0 && d.reflectDmgPct>0) dom.classList.add('reflect-mark'); if(d.poisonTurn>0) dom.classList.add('poison-mark'); if(d.linkDebuff.isLinked) dom.classList.add('link-mark'); if(d.isMantis && d.duelState?.inDuel) dom.classList.add('duel-mark'); if(unitList.some(u=>u.data.tauntedBy===d && u.data.tauntTurn>0)) dom.classList.add('taunt-mark'); drawLinks(); }
+        function drawLinks() { linkLineLayer.innerHTML=''; const groups={}; unitList.forEach(u=>{ if(u.data.linkDebuff.isLinked) { const k=u.data.linkDebuff.linkGroupKey; if(!groups[k]) groups[k]=[]; groups[k].push(u); } }); Object.values(groups).forEach(arr=>{ for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++) { const a=getUnitCenter(arr[i]), b=getUnitCenter(arr[j]); const line=document.createElementNS("http://www.w3.org/2000/svg","line"); line.setAttribute("class","link-line"); line.setAttribute("x1",a.x); line.setAttribute("y1",a.y); line.setAttribute("x2",b.x); line.setAttribute("y2",b.y); linkLineLayer.appendChild(line); } }); }
+        function findTarget(attacker) { const enemies=getTeam(attacker.team==='hero'?'enemy':'hero'); if(!enemies.length) return null; if(attacker.data.tauntedBy && attacker.data.tauntTurn>0) { const t=enemies.find(e=>e.data===attacker.data.tauntedBy); if(t) return t; } return enemies[Math.floor(Math.random()*enemies.length)]; }
+        function findLowestHpEnemy(team) { const opp=getTeam(team==='hero'?'enemy':'hero'); if(!opp.length) return null; return opp.reduce((a,b)=>a.data.hp<b.data.hp?a:b); }
+        function calcDamage(atkData,defData,mul=1) { const effDef=defData.def * (1+(defData.defBuff||0)-(defData.defDebuff||0)); let dmg=atkData.atk*mul - Math.max(0,effDef); dmg *= 0.85+Math.random()*0.3; if(Math.random()<(defData.dodgeRate||0)) return {dmg:0,isDodge:true}; let crit=false; if(Math.random()<(atkData.critRate||0)) { dmg *= (atkData.critDmg||1.5); crit=true; } return {dmg:Math.max(1,Math.floor(dmg)),isDodge:false,crit}; }
+        async function createProjectile(from,to,color,size,dur=0.32) { if(battleOver) return; const start=getUnitCenter(from), end=getUnitCenter(to); const proj=document.createElement('div'); proj.style.cssText=`position:absolute; left:${start.x-size/2}px; top:${start.y-size/2}px; width:${size}px; height:${size}px; background:radial-gradient(circle, ${color} 0%, ${color}44 35%, transparent 70%); border-radius:50%; z-index:18; pointer-events:none; transition:all ${dur}s cubic-bezier(.15,.85,.3,1); box-shadow:0 0 ${size*2}px ${color};`; battleWrap.appendChild(proj); requestAnimationFrame(()=>requestAnimationFrame(()=>{ proj.style.left=`${end.x-size/2}px`; proj.style.top=`${end.y-size/2}px`; })); await sleep(dur*1000+30); if(battleOver) { proj.remove(); return; } const burst=document.createElement('div'); burst.className='impact-burst'; burst.style.cssText=`left:${end.x-20}px; top:${end.y-20}px; width:40px; height:40px; background:radial-gradient(circle, ${color} 0%, ${color}44 30%, transparent 70%);`; battleWrap.appendChild(burst); setTimeout(()=>burst.remove(),350); proj.remove(); }
+        async function meleeCharge(unit,target,speed,isSharkUlt) { if(battleOver) return; if(!unit._origLeft) { unit._origLeft=unit.dom.offsetLeft+'px'; unit._origTop=unit.dom.offsetTop+'px'; } const tc=getUnitCenter(target); const r=unit.dom.getBoundingClientRect(); const w=battleWrap.getBoundingClientRect(); const cx=r.left-w.left+r.width/2; const cy=r.top-w.top+r.height/2; const ratio=isSharkUlt?0.78:0.62; const nx=cx+(tc.x-cx)*ratio; const ny=cy+(tc.y-cy)*ratio; unit.dom.style.transition=`left ${speed}s ease-out, top ${speed}s ease-out`; unit.dom.style.left=`${nx-r.width/2}px`; unit.dom.style.top=`${ny-r.height/2}px`; await sleep(speed*1000+50); }
+        async function meleeReturn(unit,speed) { if(battleOver) return; if(!unit._origLeft) return; unit.dom.style.transition=`left ${speed}s ease-in, top ${speed}s ease-in`; unit.dom.style.left=unit._origLeft; unit.dom.style.top=unit._origTop; await sleep(speed*1000+50); unit.dom.style.transition=''; }
+        async function doAttack(attacker,defender,opts={}) { if(battleOver) return {proc90:false}; const {isSharkUlt=false,forceDouble=false}=opts; const data=attacker.data; const body=attacker.dom.querySelector('.unit-body'); const isRanged=data.attackType==='ranged' && !isSharkUlt; if(isRanged) { body.classList.add('attack-anim'); const color=data.isWindDragon?'#44ccff':(data.isThunderPikachu?'#ffdd00':(data.enemyType==='corrosionMage'?'#bb44ff':data.enemyType==='shadowHunter'?'#ff4444':'#44dd44')); await createProjectile(attacker,defender,color,14,0.32); if(battleOver) return {proc90:false}; await sleep(150); body.classList.remove('attack-anim'); } else { await meleeCharge(attacker,defender,0.22,isSharkUlt); if(battleOver) return {proc90:false}; body.classList.add(isSharkUlt?'shark-bite-anim':'attack-anim'); } const mul=isSharkUlt?0.45:(forceDouble?1.2:1); const {dmg,isDodge}=calcDamage(data,defender.data,mul); if(isDodge) { body.classList.remove('attack-anim','shark-bite-anim'); if(!isRanged && !isSharkUlt) await meleeReturn(attacker,0.22); return {proc90:false}; } let realDmg=dmg; if(defender.data.isMantis && defender.data.duelState?.inDuel) realDmg*=2; if(defender.data.shield>0) { if(defender.data.shield>=realDmg) { defender.data.shield-=realDmg; realDmg=0; } else { realDmg-=defender.data.shield; defender.data.shield=0; } } defender.data.hp-=realDmg; defender.dom.classList.add('hurt-anim'); showDamage(defender.dom,realDmg); setBar(defender.dom,'hp',defender.data.hp,defender.data.maxHp); if(realDmg>0) reduceSleep(defender); refreshUI(defender); if(data.isThunderPikachu && realDmg>0 && Math.random()<0.3 && defender.data.hp>0) { defender.data.sleepStack+=2; showFloating(defender.dom,'💤 +2','sleep-text'); refreshUI(defender); } if(defender.data.linkDebuff.isLinked && realDmg>0) { const key=defender.data.linkDebuff.linkGroupKey; const linked=unitList.filter(u=>u.data.linkDebuff.isLinked && u.data.linkDebuff.linkGroupKey===key && u!==defender && u.data.hp>0); for(let u of linked) { let splitDmg=Math.floor(realDmg*0.6); if(u.data.isMantis && u.data.duelState?.inDuel) splitDmg*=2; u.data.hp-=splitDmg; showDamage(u.dom,splitDmg); setBar(u.dom,'hp',u.data.hp,u.data.maxHp); if(splitDmg>0) reduceSleep(u); refreshUI(u); } } if(defender.data.isWobbuffet && realDmg>0) { const reflectDmg=Math.floor(realDmg*2); attacker.data.hp-=reflectDmg; showDamage(attacker.dom,reflectDmg); setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp); if(reflectDmg>0) reduceSleep(attacker); } if(defender.data.reflectTurn>0 && realDmg>0) { const rdmg=Math.floor(realDmg*defender.data.reflectDmgPct); if(rdmg>0) { attacker.data.hp-=rdmg; showReflect(attacker.dom,rdmg); setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp); if(rdmg>0) reduceSleep(attacker); } } if(data.enemyType==='corrosionMage' && realDmg>0 && Math.random()<0.3) { defender.data.poisonDmg=Math.floor(defender.data.maxHp*0.05); defender.data.poisonTurn=2; } if(data.enemyType==='shadowHunter') { attacker.data.spdProgress=Math.min(100,attacker.data.spdProgress+30); setSpdBar(attacker.dom,attacker.data.spdProgress); } if(!isSharkUlt && !(attacker.data.isMantis && attacker.data.duelState?.inDuel)) { attacker.data.mp=Math.min(ULT_MAX_MP,attacker.data.mp+35); } if(!(defender.data.isMantis && defender.data.duelState?.inDuel)) { defender.data.mp=Math.min(ULT_MAX_MP,defender.data.mp+25); } let proc90=false; if(isSharkUlt && realDmg>0 && Math.random()<0.9) { attacker.data.mp=ULT_MAX_MP; proc90=true; } setBar(attacker.dom,'mp',attacker.data.mp,ULT_MAX_MP); setBar(defender.dom,'mp',defender.data.mp,ULT_MAX_MP); await sleep(250); if(battleOver) return {proc90}; defender.dom.classList.remove('hurt-anim'); body.classList.remove('attack-anim','shark-bite-anim'); if(!isRanged && !isSharkUlt) await meleeReturn(attacker,0.22); return {proc90}; }
+        function screenFlash() { flashLayer.classList.add('screen-flash'); setTimeout(()=>flashLayer.classList.remove('screen-flash'),500); }
+        async function showThunderAnimation() { const overlay=document.createElement('div'); overlay.className='thunder-overlay'; battleWrap.appendChild(overlay); const icon=document.createElement('div'); icon.className='thunder-icon'; icon.innerHTML='⚡'; battleWrap.appendChild(icon); await sleep(500); if(overlay.parentNode) overlay.remove(); if(icon.parentNode) icon.remove(); }
+        function playScreenEffect(type) { const overlay=document.createElement('div'); overlay.style.cssText='position:absolute;inset:0;z-index:25;pointer-events:none;'; battleWrap.appendChild(overlay); let duration=600; switch(type) { case 'hardenedFish': overlay.classList.add('thorns-screen'); break; case 'reviveBoss': const c=document.createElement('div'); c.style.cssText='position:absolute;top:50%;left:50%;width:200px;height:200px;border-radius:50%;border:4px solid #aa44ff;box-shadow:0 0 40px #aa44ff;transform:translate(-50%,-50%);'; c.classList.add('revive-circle-anim'); overlay.appendChild(c); duration=700; break; case 'corrosionMage': overlay.classList.add('acid-rain-screen'); duration=500; break; case 'mountainBeast': overlay.classList.add('earthquake-screen'); duration=400; break; case 'shadowHunter': const cr=document.createElement('div'); cr.style.cssText='position:absolute;top:50%;left:50%;width:80px;height:80px;transform:translate(-50%,-50%);background:radial-gradient(circle,transparent 30%,#ff0000 30%,#ff0000 40%,transparent 40%);border-radius:50%;'; cr.classList.add('crosshair-anim'); overlay.appendChild(cr); duration=500; break; case 'vineGuardian': overlay.classList.add('vine-border-screen'); duration=600; break; } setTimeout(()=>overlay.remove(),duration); }
+        async function doUlt(attacker) { if(battleOver) return; const body=attacker.dom.querySelector('.unit-body'); body.classList.add('ult-anim'); screenFlash(); await sleep(300); if(battleOver) { body.classList.remove('ult-anim'); return; } if(attacker.team==='enemy') { const type=attacker.data.enemyType; playScreenEffect(type); if(type==='hardenedFish') { const sv=Math.floor(attacker.data.maxHp*0.3); attacker.data.shield+=sv; attacker.data.reflectDmgPct=0.4; attacker.data.reflectTurn=2; showHeal(attacker.dom,sv); } else if(type==='reviveBoss') { const dead=unitList.filter(u=>u.team==='enemy' && u.data.hp<=0); if(dead.length) { const t=dead[Math.floor(Math.random()*dead.length)]; t.data.hp=t.data.maxHp; t.data.shield=0; t.data.mp=0; t.data.stun=0; t.data.poisonDmg=0; t.data.poisonTurn=0; t.data.linkDebuff.isLinked=false; t.data.defDebuff=0; t.data.tauntedBy=null; t.data.sleepStack=0; showHeal(t.dom,t.data.maxHp); setBar(t.dom,'hp',t.data.hp,t.data.maxHp); setBar(t.dom,'mp',0,ULT_MAX_MP); refreshUI(t); } else { for(let u of getTeam('enemy')) { const sv=Math.floor(u.data.maxHp*0.2); u.data.shield+=sv; showHeal(u.dom,sv); } } } else if(type==='corrosionMage') { for(let t of getTeam('hero')) { if(t.data.poisonTurn>0) { const burst=t.data.poisonTurn*t.data.poisonDmg; t.data.hp-=burst; showPoison(t.dom,burst); } const res=calcDamage(attacker.data,t.data,0.8); if(!res.isDodge && t.data.hp>0) { let d=res.dmg; if(t.data.shield>0) { if(t.data.shield>=d) { t.data.shield-=d; d=0; } else { d-=t.data.shield; t.data.shield=0; } } t.data.hp-=d; showDamage(t.dom,d); } if(t.data.hp>0) { t.data.poisonDmg=Math.floor(t.data.maxHp*0.05); t.data.poisonTurn=3; } setBar(t.dom,'hp',t.data.hp,t.data.maxHp); refreshUI(t); } } else if(type==='mountainBeast') { attacker.data.shield+=Math.floor(attacker.data.maxHp*0.4); attacker.data.controlImmune=2; showHeal(attacker.dom,Math.floor(attacker.data.maxHp*0.4)); for(let h of getTeam('hero')) { h.data.tauntedBy=attacker.data; h.data.tauntTurn=1; refreshUI(h); } } else if(type==='shadowHunter') { const target=findLowestHpEnemy(attacker.team); if(target) { const res=calcDamage(attacker.data,target.data,2.5); if(!res.isDodge) { let d=res.dmg; if(target.data.shield>0) { if(target.data.shield>=d) { target.data.shield-=d; d=0; } else { d-=target.data.shield; target.data.shield=0; } } target.data.hp-=d; showDamage(target.dom,d); if(target.data.hp>0) { target.data.defDebuff=0.5; target.data.defDebuffTurn=2; } setBar(target.dom,'hp',target.data.hp,target.data.maxHp); refreshUI(target); } if(target.data.hp<=0) { attacker.data.spdProgress=100; setSpdBar(attacker.dom,100); } } } else if(type==='vineGuardian') { for(let u of getTeam('enemy')) { const heal=Math.floor(u.data.maxHp*0.25); u.data.hp=Math.min(u.data.maxHp,u.data.hp+heal); showHeal(u.dom,heal); u.data.stun=0; u.data.poisonDmg=0; u.data.poisonTurn=0; u.data.linkDebuff.isLinked=false; u.data.defDebuff=0; u.data.tauntedBy=null; u.data.sleepStack=0; u.data.defBuff=0.2; u.data.defBuffTurn=2; setBar(u.dom,'hp',u.data.hp,u.data.maxHp); refreshUI(u); } } attacker.data.mp=0; setBar(attacker.dom,'mp',0,ULT_MAX_MP); body.classList.remove('ult-anim'); return; } if(attacker.data.isWindDragon) { const enemies=getTeam('enemy').slice(0,3); const key=Date.now().toString(); for(let e of enemies) { if(battleOver) break; await createProjectile(attacker,e,'#44ccff',20,0.28); e.data.linkDebuff={isLinked:true,linkTurn:2,linkGroupKey:key}; refreshUI(e); } attacker.data.mp=0; } else if(attacker.data.isWobbuffet) { body.classList.add('heal-anim'); const heal=Math.floor(attacker.data.maxHp*0.35); attacker.data.hp=Math.min(attacker.data.maxHp,attacker.data.hp+heal); showHeal(attacker.dom,heal); attacker.data.mp=0; } else if(attacker.data.isShark) { body.classList.add('shark-ult-charge'); await sleep(350); body.classList.remove('shark-ult-charge'); let count=1; showCombo(count); let loop=true; while(loop && !battleOver) { const t=findTarget(attacker); if(!t) break; const {proc90}=await doAttack(attacker,t,{isSharkUlt:true}); if(!proc90) { loop=false; attacker.data.mp=0; } else { count++; showCombo(count); await sleep(100); } } await meleeReturn(attacker,0.16); removeCombo(); attacker.data.mp=0; } else if(attacker.data.isMantis) { const arena=document.createElement('div'); arena.className='duel-arena-overlay'; arena.innerHTML='<div class="duel-vs-text">VS</div>'; battleWrap.appendChild(arena); requestAnimationFrame(()=>arena.classList.add('active')); await sleep(600); arena.classList.remove('active'); arena.remove(); const target=findTarget(attacker); if(!target) return; attacker.data.mp=0; attacker.data.hp=Math.floor(attacker.data.hp*0.5); setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp); attacker.data.duelState.inDuel=true; for(let i=0;i<8&&!battleOver;i++) { await meleeCharge(attacker,target,0.14,false); await doAttack(attacker,target,{forceDouble:true}); await meleeReturn(attacker,0.14); if(target.data.hp<=0) break; const {dmg}=calcDamage(target.data,attacker.data,1); let reflectDmg=dmg; if(attacker.data.duelState.inDuel) reflectDmg*=2; if(attacker.data.shield>0) { if(attacker.data.shield>=reflectDmg) { attacker.data.shield-=reflectDmg; reflectDmg=0; } else { reflectDmg-=attacker.data.shield; attacker.data.shield=0; } } attacker.data.hp-=reflectDmg; showDamage(attacker.dom,reflectDmg); setBar(attacker.dom,'hp',attacker.data.hp,attacker.data.maxHp); if(reflectDmg>0) reduceSleep(attacker); if(attacker.data.hp<=0) { attacker.data.hp=1; attacker.data.duelState.inDuel=false; break; } await sleep(200); } attacker.data.duelState.inDuel=false; } else if(attacker.data.isThunderPikachu) { await showThunderAnimation(); if(battleOver) return; const enemies=getTeam('enemy'); for(let e of enemies) { if(battleOver) break; if(e.data.hp<=0) continue; const {dmg,isDodge}=calcDamage(attacker.data,e.data,0.9); if(!isDodge) { let realDmg=dmg; if(e.data.shield>0) { if(e.data.shield>=realDmg) { e.data.shield-=realDmg; realDmg=0; } else { realDmg-=e.data.shield; e.data.shield=0; } } e.data.hp-=realDmg; showDamage(e.dom,realDmg); setBar(e.dom,'hp',e.data.hp,e.data.maxHp); if(realDmg>0) reduceSleep(e); if(e.data.hp>0) { e.data.sleepStack+=1; showFloating(e.dom,'💤 +1','sleep-text'); } refreshUI(e); } await sleep(100); } attacker.data.mp=0; if(!battleOver && Math.random()<0.3) { const target=findTarget(attacker); if(target && !battleOver) { await sleep(200); await doAttack(attacker,target,{}); } } } if(!battleOver) { setBar(attacker.dom,'mp',attacker.data.mp,ULT_MAX_MP); body.classList.remove('ult-anim','heal-anim','shark-ult-charge'); } }
+        function showCombo(count) { if(comboEl) comboEl.remove(); const div=document.createElement('div'); div.className='combo-display'; div.innerHTML=`<div class="combo-count">连击 x${count}</div><div class="combo-label">${count>=8?'疯狂连击！':count>=5?'超强连击！':''}</div>`; battleWrap.appendChild(div); comboEl=div; }
+        function removeCombo() { if(comboEl) { comboEl.remove(); comboEl=null; } }
+        function tickEffects() { unitList.forEach(u=>{ if(u.data.hp<=0) return; if(u.data.poisonTurn>0) { u.data.hp-=u.data.poisonDmg; showPoison(u.dom,u.data.poisonDmg); reduceSleep(u); u.data.poisonTurn--; if(u.data.poisonTurn<=0) u.data.poisonDmg=0; } if(u.data.reflectTurn>0) { u.data.reflectTurn--; if(u.data.reflectTurn<=0) u.data.reflectDmgPct=0; } if(u.data.tauntTurn>0) { u.data.tauntTurn--; if(u.data.tauntTurn<=0) u.data.tauntedBy=null; } if(u.data.defDebuffTurn>0) { u.data.defDebuffTurn--; if(u.data.defDebuffTurn<=0) u.data.defDebuff=0; } if(u.data.defBuffTurn>0) { u.data.defBuffTurn--; if(u.data.defBuffTurn<=0) u.data.defBuff=0; } if(u.data.controlImmune>0) u.data.controlImmune--; if(u.data.linkDebuff.isLinked) { u.data.linkDebuff.linkTurn--; if(u.data.linkDebuff.linkTurn<=0) u.data.linkDebuff.isLinked=false; } if(u.data.stun>0) u.data.stun--; setBar(u.dom,'hp',u.data.hp,u.data.maxHp); refreshUI(u); }); }
+
+        function initBattle() {
+            battleOver = true;
+            setTimeout(() => {
+                battleOver = false; isPause = false; pauseBtn.textContent = '暂停'; resultTip.style.display = 'none';
+                flashLayer.classList.remove('screen-flash'); linkLineLayer.innerHTML = ''; if(comboEl) { comboEl.remove(); comboEl = null; }
+                battleWrap.querySelectorAll('.unit').forEach(u => u.remove());
+
+                // 创建敌方单位
+                enemyDefs.forEach(ed => {
+                    const div = document.createElement('div'); div.className = 'unit'; div.id = ed.id;
+                    const leftVal = ed.left.startsWith('right:') ? null : ed.left;
+                    const rightVal = ed.left.startsWith('right:') ? ed.left.replace('right:', '') : null;
+                    div.style.cssText = `${leftVal?'left:'+leftVal+';':''}${rightVal?'right:'+rightVal+';':''}top:${ed.top};`;
+                    div.innerHTML = `<div class="unit-body"><img src="${ed.img}" alt="${ed.name}"></div><div class="bar-wrap"><div class="hp-fill"></div></div><div class="bar-wrap"><div class="mp-fill"></div></div><div class="spd-bar-wrap"><div class="spd-fill"></div></div><div class="unit-name">${ed.name}</div>`;
+                    battleWrap.appendChild(div);
+                });
+
+                // 创建我方单位：严格按槽位顺序，空位不创建
+                unitList = [];
+                for (let i = 0; i < 6; i++) {
+                    const heroId = teamSlots[i];
+                    if (!heroId) continue; // 空位跳过
+                    const hero = ALL_HEROES.find(h => h.id === heroId);
+                    if (!hero) continue;
+                    const pos = heroPositions[i];
+                    const div = document.createElement('div'); div.className = 'unit'; div.id = 'hero_' + i;
+                    const leftVal = pos.left.startsWith('right:') ? null : pos.left;
+                    const rightVal = pos.left.startsWith('right:') ? pos.left.replace('right:', '') : null;
+                    div.style.cssText = `${leftVal?'left:'+leftVal+';':''}${rightVal?'right:'+rightVal+';':''}top:${pos.top};`;
+                    div.innerHTML = `<div class="unit-body"><img src="${hero.img}" alt="${hero.name}"></div><div class="bar-wrap"><div class="hp-fill" style="background:${hero.color};"></div></div><div class="bar-wrap"><div class="mp-fill"></div></div><div class="spd-bar-wrap"><div class="spd-fill"></div></div><div class="unit-name ${hero.textColor||''}">${hero.name}</div>`;
+                    battleWrap.appendChild(div);
+
+                    const template = {
+                        hp: hero.hp, maxHp: hero.maxHp, mp: 0, atk: hero.atk, def: hero.def, spd: hero.spd,
+                        attackType: hero.attackType, isWobbuffet: hero.isWobbuffet || false, isWindDragon: hero.isWindDragon || false,
+                        isShark: hero.isShark || false, isMantis: hero.isMantis || false, isThunderPikachu: hero.isThunderPikachu || false,
+                        critRate: hero.critRate || 0, critDmg: hero.critDmg || 1.5, dodgeRate: hero.dodgeRate || 0,
+                        duelState: hero.isMantis ? { inDuel: false } : undefined, shield: 0, stun: 0, spdProgress: 0, ...baseStatus()
+                    };
+                    unitList.push({ dom: div, team: 'hero', data: template });
+                }
+
+                // 敌方单位加入 unitList
+                enemyDefs.forEach(ed => {
+                    const dom = document.getElementById(ed.id);
+                    if (dom && enemyTemplates[ed.key]) {
+                        unitList.push({ dom, team: 'enemy', data: { ...enemyTemplates[ed.key], shield: 0, stun: 0, spdProgress: 0, ...baseStatus() } });
+                    }
+                });
+
+                unitList.forEach(u => {
+                    u.dom.style.transition = '';
+                    u._origLeft = u.dom.offsetLeft + 'px';
+                    u._origTop = u.dom.offsetTop + 'px';
+                    setBar(u.dom, 'hp', u.data.hp, u.data.maxHp);
+                    setBar(u.dom, 'mp', 0, ULT_MAX_MP);
+                    setSpdBar(u.dom, 0);
+                    refreshUI(u);
+                });
+                battleLoop();
+            }, 200);
+        }
+
+        async function battleLoop() {
+            let roundCount = 0;
+            while (!battleOver) {
+                const alive = unitList.filter(u => u.data.hp > 0);
+                if (roundCount === 0) roundCount = alive.length;
+                alive.forEach(u => { if (u.data.stun <= 0 && u.data.sleepStack <= 0 && !(u.data.isMantis && u.data.duelState?.inDuel)) { u.data.spdProgress += u.data.spd; setSpdBar(u.dom, u.data.spdProgress); } });
+                const actor = alive.find(u => u.data.spdProgress >= 100 && u.data.stun <= 0 && u.data.sleepStack <= 0);
+                if (!actor) { await sleep(150); continue; }
+                actor.data.spdProgress -= 100; setSpdBar(actor.dom, actor.data.spdProgress);
+                if (actor.data.isMantis && actor.data.duelState?.inDuel) { roundCount--; continue; }
+                const enemies = getTeam(actor.team === 'hero' ? 'enemy' : 'hero');
+                if (!enemies.length) { battleOver = true; resultTip.style.display = 'block'; resultText.textContent = actor.team === 'hero' ? '我方胜利！' : '我方战败'; break; }
+                if (actor.data.mp >= ULT_MAX_MP) { await doUlt(actor); } else { const target = findTarget(actor); if (!target) break; await doAttack(actor, target, {}); }
+                if (!battleOver && actor.team === 'enemy') { const mantisUnit = unitList.find(u => u.data.isMantis && u.data.hp > 0); if (mantisUnit) { const heal = Math.floor(mantisUnit.data.maxHp * 0.05); mantisUnit.data.hp = Math.min(mantisUnit.data.maxHp, mantisUnit.data.hp + heal); showHeal(mantisUnit.dom, heal); setBar(mantisUnit.dom, 'hp', mantisUnit.data.hp, mantisUnit.data.maxHp); refreshUI(mantisUnit); } }
+                roundCount--;
+                if (roundCount <= 0) { tickEffects(); roundCount = unitList.filter(u => u.data.hp > 0).length; }
+                const ha = getTeam('hero').length, ea = getTeam('enemy').length;
+                if (ha === 0 || ea === 0) { battleOver = true; resultTip.style.display = 'block'; resultText.textContent = ha === 0 ? '我方战败' : '我方胜利！'; }
+            }
+        }
+
+        function startBattle() { showView(battleView); initBattle(); }
+
+        renderPrepareUI();
+        showView(prepareView);
+    })();
+</script>
+</body>
+</html>
